@@ -94,6 +94,11 @@ endfunction
 function! s:open_file(name) abort
   let name = a:name
   let name = simplify(fnamemodify(name, ':p'))
+  let l:is_dir = isdirectory(name)
+  if l:is_dir
+    " trim final (back)slash since dir buffer name does not contain it.
+    let name = substitute(name, has('win32') ? '\v\\$' : '\v/$', '', '')
+  endif
 
   let bufnrs = tabpagebuflist()
   for buffer in getbufinfo()
@@ -109,21 +114,23 @@ function! s:open_file(name) abort
   endfor
 
   " file not found in open windows
-  if !filereadable(name)
+  if !filereadable(name) && !l:is_dir
     redraws | echon 'file not readable / not found.'
     return 0
   endif
 
-  echo printf('[%s] file not listed.', name)
-  let job_finished = match(term_getstatus(bufnr()), 'finished') >= 0
-  if job_finished
-    echo 'open it? [s/v/t/N] r[e]use '
-  else
+  echo printf('[%s] %s not listed.', name, l:is_dir ? 'dir' : 'file')
+  let job_running = has('nvim') ?
+        \ ( jobwait([&channel], 0)[0] == -1 ) :
+        \ ( match(term_getstatus(bufnr()), 'running') >= 0 )
+  if job_running
     echo 'open it? [s/v/t/N] '
+  else
+    echo 'open it? [s/v/t/N] r[e]use '
   endif
   let action = tolower(nr2char(getchar()))
   let actions = {'v': 'vs', 's': 'sp', 't': 'tabe'}
-  if job_finished
+  if !job_running
     " 'e' -> dummy
     let actions = extend(actions, {'e': ':'})
   endif
